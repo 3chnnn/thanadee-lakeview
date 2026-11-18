@@ -1,0 +1,779 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ธนดี เลควิว 3D</title>
+<style>
+/* Layout: Apple-Maps-like — full-bleed 3D scene, floating glass card (bottom sheet on phones), segmented views on top, control stack top-right. */
+:root{
+  --label:#000;--label2:rgba(60,60,67,.6);--label3:rgba(60,60,67,.3);
+  --sep:rgba(60,60,67,.18);--fill:rgba(120,120,128,.12);--fill2:rgba(120,120,128,.2);
+  --mat:rgba(250,250,252,.42);--mat-hi:rgba(255,255,255,.82);--cell:rgba(255,255,255,.5);--rim1:rgba(255,255,255,.85);--rim2:rgba(255,255,255,.12);
+  --blue:#007aff;--yellow:#ffcc00;--green:#34c759;--orange:#ff9500;--teal:#30b0c7;
+  --font:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --bg:#1c2733;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --label:#fff;--label2:rgba(235,235,245,.6);--label3:rgba(235,235,245,.3);
+  --sep:rgba(84,84,88,.55);--fill:rgba(118,118,128,.24);--fill2:rgba(118,118,128,.36);
+  --mat:rgba(30,30,34,.46);--mat-hi:rgba(255,255,255,.18);--cell:rgba(120,120,128,.16);--rim1:rgba(255,255,255,.42);--rim2:rgba(255,255,255,.05);
+  --blue:#0a84ff;--yellow:#ffd60a;--green:#30d158;--orange:#ff9f0a;--teal:#40c8e0;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --label:#fff;--label2:rgba(235,235,245,.6);--label3:rgba(235,235,245,.3);
+  --sep:rgba(84,84,88,.55);--fill:rgba(118,118,128,.24);--fill2:rgba(118,118,128,.36);
+  --mat:rgba(30,30,34,.46);--mat-hi:rgba(255,255,255,.18);--cell:rgba(120,120,128,.16);--rim1:rgba(255,255,255,.42);--rim2:rgba(255,255,255,.05);
+  --blue:#0a84ff;--yellow:#ffd60a;--green:#30d158;--orange:#ff9f0a;--teal:#40c8e0;color-scheme:dark}
+[hidden]{display:none!important}
+html,body{height:100%;overflow:hidden}
+body{margin:0;background:var(--bg);color:var(--label);font-family:var(--font);font-size:15px;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit}
+.glass{position:relative;background:var(--mat);backdrop-filter:blur(22px) saturate(1.9) brightness(1.04);-webkit-backdrop-filter:blur(22px) saturate(1.9) brightness(1.04)}
+.glass::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;z-index:4;
+  background:linear-gradient(140deg,var(--rim1),var(--rim2) 34%,var(--rim2) 66%,var(--rim1));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+#sky{position:fixed;inset:0;background:linear-gradient(#24395c,#c98a5a)}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#c.measuring{cursor:crosshair}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+
+/* ---- 3D labels ---- */
+#labels{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+.lab{position:absolute;left:0;top:0;white-space:nowrap;font-size:13px;font-weight:600;color:#fff;letter-spacing:-.01em;
+  -webkit-text-stroke:3px rgba(0,0,0,.42);paint-order:stroke fill;transition:opacity .25s;will-change:transform}
+.lab small{display:block;font-weight:500;font-size:11px;opacity:.85}
+.lab .in{transform:translate(-50%,-50%);text-align:center}
+.lab.water{font-size:15px;font-weight:600;letter-spacing:.14em;color:#e9f6fb}
+.lab.mang{color:#d8f6dc}
+.lab.sun{color:#ffe3b3}
+.lab.dim .in{font-size:12px;font-weight:600;color:#1c1c1e;background:rgba(255,255,255,.9);padding:4px 10px;border-radius:999px;-webkit-text-stroke:0}
+.pin .in{transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;-webkit-text-stroke:0}
+.pin .tag{background:rgba(255,255,255,.94);color:#1c1c1e;padding:8px 14px 9px;border-radius:18px;font-size:14px;font-weight:600;line-height:1.25;text-align:center}
+.pin .tag small{color:#6e6e73;font-weight:500;font-size:11.5px}
+.pin .stem{width:0;height:0;border:7px solid transparent;border-top-color:rgba(255,255,255,.94);margin-top:-1px}
+.pin .dot{width:16px;height:16px;border-radius:50%;background:var(--yellow);border:3px solid #fff;margin-top:6px}
+
+/* ---- segmented views ---- */
+.top{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:416px;right:76px;display:flex;justify-content:center;pointer-events:none}
+.views{display:flex;gap:2px;padding:4px;border-radius:999px;pointer-events:auto;overflow-x:auto;scrollbar-width:none;max-width:100%}
+.views::-webkit-scrollbar{display:none}
+.views button{all:unset;cursor:pointer;padding:7px 15px;border-radius:999px;font-size:13.5px;font-weight:500;color:var(--label);white-space:nowrap;transition:background .2s}
+.views button[aria-pressed=true]{background:var(--mat-hi);font-weight:600}
+.views [data-v=walk]{display:none}
+
+/* ---- control stack (top-right) ---- */
+.ctrl{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+.stack{display:flex;flex-direction:column;border-radius:999px;overflow:hidden}
+.stack button{all:unset;cursor:pointer;width:44px;height:44px;display:grid;place-items:center;color:var(--blue)}
+.stack button+button{border-top:.5px solid var(--sep)}
+.stack button[aria-pressed=true]{background:var(--blue);color:#fff}
+.stack svg{width:21px;height:21px}
+#compass{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;cursor:pointer}
+#compass svg{width:30px;height:30px}
+
+/* ---- layers popover ---- */
+#layers{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + 54px);width:330px;max-width:calc(100vw - 92px);max-height:calc(100% - 24px);overflow-y:auto;border-radius:28px;padding:16px 0 16px;z-index:5}
+.pop-h{display:flex;align-items:center;justify-content:space-between;padding:0 16px 8px}
+.pop-h b{font-size:17px;font-weight:600}
+.link{all:unset;cursor:pointer;color:var(--blue);font-size:15px;font-weight:600}
+.cap{font-size:12.5px;color:var(--label2);text-transform:none;padding:12px 32px 6px;margin:0}
+.group{margin:0 16px;background:var(--cell);border-radius:20px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 16px;position:relative}
+.row+.row::before{content:"";position:absolute;top:0;left:16px;right:0;border-top:.5px solid var(--sep)}
+.row .t{flex:1;min-width:0;font-size:15px}
+.row .v{color:var(--label2);font-size:15px;text-align:right}
+.maplink{text-decoration:none;color:inherit;padding-block:8px}.maplink small{display:block;font-size:12.5px;color:var(--label2)}.maplink .go{color:var(--blue);white-space:nowrap}
+.sw{all:unset;cursor:pointer;display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:0 16px;box-sizing:border-box;position:relative}
+.sw .t{flex:1;font-size:15px}
+.sw .swatch{width:10px;height:10px;border-radius:3px;background:var(--k,var(--label3))}
+.sw i{width:51px;height:31px;border-radius:16px;background:var(--fill2);position:relative;transition:background .2s;flex:none}
+.sw i::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;transition:transform .25s cubic-bezier(.25,1,.5,1)}
+.sw[aria-pressed=true] i{background:var(--green)}
+.sw[aria-pressed=true] i::after{transform:translateX(20px)}
+.sw+.sw::before{content:"";position:absolute;top:0;left:38px;right:0;border-top:.5px solid var(--sep)}
+.slide{padding:10px 16px 12px;display:flex;flex-direction:column;gap:4px}
+.slide+.slide{border-top:.5px solid var(--sep);margin-left:16px;padding-left:0}
+.slide div{display:flex;justify-content:space-between;font-size:15px}
+.slide output{color:var(--label2)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--fill2)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:38px;height:24px;border-radius:999px;background:#fff;margin-top:-10px;border:.5px solid rgba(0,0,0,.08)}
+input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--fill2)}
+input[type=range]::-moz-range-thumb{width:38px;height:24px;border:.5px solid rgba(0,0,0,.08);border-radius:999px;background:#fff}
+.wide{all:unset;cursor:pointer;display:block;text-align:center;margin:12px 16px 0;padding:12px;border-radius:999px;background:var(--cell);color:var(--blue);font-weight:600}
+
+/* ---- info card / sheet ---- */
+#panel{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));width:392px;max-height:calc(100% - 24px - env(safe-area-inset-top,0px));
+  border-radius:30px;display:flex;flex-direction:column;overflow:hidden;z-index:3}
+.grab{display:none}
+.sheet-h{padding:18px 18px 6px;display:flex;align-items:flex-start;gap:10px}
+.sheet-h div{flex:1;min-width:0}
+h1{font-size:26px;line-height:1.2;font-weight:700;letter-spacing:-.02em;margin:0;text-wrap:balance}
+.sub{margin:4px 0 0;color:var(--label2);font-size:14.5px}
+#sheetT{display:none}
+.scroll{overflow-y:auto;padding:8px 0 20px;scrollbar-width:none;overscroll-behavior:contain}
+.scroll::-webkit-scrollbar{display:none}
+.acts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:6px 16px 4px}
+.act{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;padding:11px 4px 10px;border-radius:20px;background:var(--cell);color:var(--blue);font-size:12.5px;font-weight:600;text-align:center;text-decoration:none}
+.act.pri{background:var(--blue);color:#fff}
+.act svg{width:22px;height:22px}
+.price{margin:14px 16px 0;background:var(--cell);border-radius:20px;padding:14px 16px}
+.price .k{font-size:12.5px;color:var(--label2)}
+.price b{display:block;font-size:30px;font-weight:700;letter-spacing:-.02em;margin-top:2px}
+.price b span{font-size:17px;font-weight:600;margin-left:4px}
+.price .per{display:flex;gap:16px;margin-top:6px;font-size:13px;color:var(--label2);flex-wrap:wrap}
+.stk{flex-direction:column;align-items:stretch;gap:2px;padding:11px 16px}
+.stk .t{font-size:13px;color:var(--label2)}
+.stk .v{text-align:left;color:var(--label);font-size:15px;line-height:1.45}
+.star{color:var(--orange)}
+.xs{padding:12px 14px 10px}
+.xs svg{width:100%;height:auto;display:block}
+.xs .ground{fill:var(--fill)}.xs .edge{stroke:var(--label);fill:none}.xs .tx{fill:var(--label2)}.xs .mut{stroke:var(--label3)}
+.suns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 16px}
+.suns div{background:var(--cell);border-radius:20px;padding:12px 14px}
+.suns span{display:block;font-size:12.5px;color:var(--label2)}
+.suns b{display:block;font-size:24px;font-weight:600;letter-spacing:-.02em;margin:2px 0}
+.suns div:first-child b{color:var(--orange)}
+.photos{display:flex;gap:8px;overflow-x:auto;padding:0 16px;scroll-snap-type:x mandatory;scrollbar-width:none}
+.photos::-webkit-scrollbar{display:none}
+.photos button{all:unset;cursor:pointer;flex:none;width:168px;aspect-ratio:4/3;border-radius:18px;overflow:hidden;scroll-snap-align:start;background:var(--fill)}
+.photos img{width:100%;height:100%;object-fit:cover;display:block}
+.foot{font-size:12.5px;color:var(--label2);line-height:1.55;padding:14px 32px 0;margin:0}
+
+/* ---- toast, walk, loading, lightbox ---- */
+.toast{position:fixed;left:50%;top:calc(64px + env(safe-area-inset-top,0px));transform:translateX(-50%);padding:9px 16px;border-radius:999px;font-size:14px;font-weight:500;pointer-events:none;white-space:nowrap}
+.credit{position:fixed;right:max(12px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:10px;color:rgba(255,255,255,.75);text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:none}
+body.walking #panel,body.walking .top,body.walking .ctrl,body.walking #layers,body.walking .credit{display:none!important}
+#walkUI{position:fixed;inset:0;pointer-events:none}
+#walkX{all:unset;cursor:pointer;position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));pointer-events:auto;padding:10px 18px;border-radius:999px;font-weight:600;color:var(--blue)}
+.whint{position:absolute;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:flex;gap:14px;font-size:13.5px;padding:10px 18px;border-radius:999px;white-space:nowrap}
+.whint .mob{display:none}
+#joy{position:absolute;left:max(28px,env(safe-area-inset-left,0px));bottom:calc(32px + env(safe-area-inset-bottom,0px));width:120px;height:120px;border-radius:50%;pointer-events:auto;touch-action:none;display:none;place-items:center}
+#joy i{width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,.92)}
+@media (pointer:coarse){#joy{display:grid}.whint{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px));left:auto;right:max(12px,env(safe-area-inset-right,0px));transform:none}.whint .desk{display:none}.whint .mob{display:inline}}
+.loading{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:10px;padding:12px 20px;border-radius:999px;font-size:14px;pointer-events:none;transition:opacity .4s}
+.spin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--fill2);border-top-color:var(--label2);animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(1turn)}}
+body.loaded .loading{opacity:0}
+#lb{position:fixed;inset:0;background:#000;display:grid;place-items:center;padding:56px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px));z-index:20;color:#fff}
+#lb img{max-width:100%;max-height:78vh;border-radius:22px}
+#lb p{margin:12px 0 0;text-align:center;color:rgba(235,235,245,.6);font-size:14px}
+#lbX{all:unset;cursor:pointer;position:absolute;top:calc(14px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));color:#0a84ff;font-weight:600;font-size:17px}
+
+/* ---- phone: bottom sheet ---- */
+@media (max-width:820px){
+  .top{left:max(12px,env(safe-area-inset-left,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + 54px);justify-content:flex-start}
+  .views button{padding:7px 12px}
+  #panel{top:auto;left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));width:auto;max-height:76%;border-radius:32px;transition:transform .45s cubic-bezier(.2,.9,.25,1);
+    transform:translateY(calc(100% - 84px))}
+  #panel.open{transform:none}
+  .grab{display:block;width:36px;height:5px;border-radius:3px;background:var(--label3);margin:6px auto 0;flex:none}
+  .sheet-h{padding:8px 16px 10px;cursor:pointer;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  h1{font-size:21px}
+  .sub{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #sheetT{display:block;all:unset;color:var(--blue);font-weight:600;font-size:15px;padding-top:4px;cursor:pointer}
+  .scroll{padding-bottom:20px}
+  .credit{bottom:calc(108px + env(safe-area-inset-bottom,0px))}
+  #layers{right:max(12px,env(safe-area-inset-right,0px));top:calc(122px + env(safe-area-inset-top,0px));max-width:calc(100vw - 24px);max-height:calc(100% - 250px)}
+}
+@media (prefers-reduced-motion:reduce){#panel,.lab,.sw i,.sw i::after{transition:none}.spin{animation:none}}
+</style>
+
+<div id="sky"></div>
+<canvas id="c" aria-label="แผนที่สามมิติของที่ดิน"></canvas>
+<div id="labels"></div>
+
+<div class="top">
+  <nav class="views glass" aria-label="มุมมอง">
+    <button data-v="over" aria-pressed="true">ภาพรวม</button>
+    <button data-v="top" aria-pressed="false">มุมบน</button>
+    <button data-v="drone" aria-pressed="false">หน้าแปลง</button>
+    <button data-v="isl" aria-pressed="false">แดดตก</button>
+    <button data-v="region" aria-pressed="false">ทะเลสาบ</button>
+    <button data-v="walk" aria-pressed="false">เดิน</button>
+  </nav>
+</div>
+
+<div class="ctrl">
+  <div class="stack glass">
+    <button id="layBtn" aria-label="ชั้นข้อมูลและเวลา" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3 2.5 8 12 13l9.5-5z"/><path d="m2.5 12.2 9.5 5 9.5-5"/><path d="m2.5 16.2 9.5 5 9.5-5" opacity=".55"/></svg></button>
+    <button id="measure" aria-pressed="false" aria-label="วัดระยะ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 16.5 16.5 3l4.5 4.5L7.5 21z"/><path d="m7 12.5 2 2M9.8 9.7l1.4 1.4M12.6 6.9l2 2"/></svg></button>
+  </div>
+  <div id="compass" class="glass" role="button" tabindex="0" aria-label="หันทิศเหนือขึ้น">
+    <svg viewBox="0 0 30 30" id="needle"><path d="M15 4l4 11h-8z" fill="#ff3b30"/><path d="M15 26l-4-11h8z" fill="#8e8e93"/></svg>
+  </div>
+</div>
+
+<div id="layers" class="glass" hidden role="dialog" aria-label="ชั้นข้อมูล">
+  <div class="pop-h"><b>ชั้นข้อมูล</b><button class="link" id="layDone">เสร็จ</button></div>
+  <div class="group">
+    <button class="sw" data-l="plot" aria-pressed="true" style="--k:var(--yellow)"><span class="swatch"></span><span class="t">ขอบเขตแปลง</span><i></i></button>
+    <button class="sw" data-l="dim" aria-pressed="true" style="--k:#fff"><span class="swatch"></span><span class="t">ระยะหน้ากว้าง/ความลึก</span><i></i></button>
+    <button class="sw" data-l="split" aria-pressed="false" style="--k:var(--label2)"><span class="swatch"></span><span class="t">ตัวอย่างแบ่ง 3 แปลง</span><i></i></button>
+    <button class="sw" data-l="field" aria-pressed="false" style="--k:var(--green)"><span class="swatch"></span><span class="t">เทียบสนามฟุตบอล</span><i></i></button>
+    <button class="sw" data-l="sun" aria-pressed="true" style="--k:var(--orange)"><span class="swatch"></span><span class="t">ทิศดวงอาทิตย์</span><i></i></button>
+  </div>
+  <p class="cap">แสงแดดตามวันและเวลาจริงที่แปลงนี้</p>
+  <div class="group">
+    <label class="slide" for="doy"><div><span>วันที่</span><output id="doyO"></output></div><input type="range" id="doy" min="1" max="365" step="1"></label>
+    <label class="slide" for="hr"><div><span>เวลา</span><output id="hrO"></output></div><input type="range" id="hr" min="5.5" max="19.5" step="0.0833"></label>
+  </div>
+  <button class="wide" id="goldBtn">ไปช่วงแดดเย็น</button>
+</div>
+
+<aside id="panel" class="glass">
+  <i class="grab"></i>
+  <header class="sheet-h" id="sheetH">
+    <div><h1>ที่ดินริมทะเลสาบสงขลา</h1><p class="sub">9 ไร่ 2 งาน 50 ตร.ว. · ต.ชุมพล อ.สทิงพระ จ.สงขลา</p></div>
+    <button id="sheetT">รายละเอียด</button>
+  </header>
+  <div class="scroll">
+    <div class="acts">
+      <a class="act pri" href="https://www.facebook.com/profile.php?id=61596585664062" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3.5c-4.9 0-8.8 3.6-8.8 8 0 2.4 1.1 4.5 2.9 6v3l2.8-1.6c1 .3 2 .5 3.1.5 4.9 0 8.8-3.6 8.8-8s-3.9-7.9-8.8-7.9z"/></svg>ทักแชทเพจ</a>
+      <a class="act" href="https://www.google.com/maps/search/?api=1&query=7.574103,100.372306" title="เปิดใน Google Maps" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg>นำทาง</a>
+      <button class="act" data-go="walk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4.5" r="1.8"/><path d="m9 21 2.5-6 2.5 2.5V21M8 11l3-3.5 3 1.5 2 3M11.5 15l.5-5"/></svg>เดินในแปลง</button>
+      <button class="act" data-go="isl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 15a5 5 0 0 1 10 0M3 15h18M6 19h12M12 4v3M4.9 7.9l1.6 1.6M19.1 7.9l-1.6 1.6"/></svg>วิวแดดตก</button>
+    </div>
+
+    <div class="price">
+      <span class="k">ราคาขายทั้งแปลง · เจ้าของขายเอง</span>
+      <b>5,000,000<span>บาท</span></b>
+      <div class="per"><span>≈ 1,298.70 บาท/ตร.ว.</span><span>≈ 519,481 บาท/ไร่</span></div>
+    </div>
+
+    <p class="cap">ข้อมูลแปลง</p>
+    <div class="group">
+      <div class="row"><span class="t">เนื้อที่</span><span class="v">3,850 ตร.ว.</span></div>
+      <a class="row maplink" href="https://www.google.com/maps/search/?api=1&query=7.574103,100.372306" target="_blank" rel="noopener"><span class="t">พิกัดกลางแปลง<small>7.574103, 100.372306</small></span><span class="v go">Google Maps ›</span></a>
+      <div class="row"><span class="t">เอกสาร</span><span class="v">น.ส.3 ก.</span></div>
+      <div class="row"><span class="t">หน้ากว้างติดถนน 2002</span><span class="v">≈ 150 ม.</span></div>
+      <div class="row"><span class="t">ถนนหน้าแปลง</span><span class="v">คอนกรีต</span></div>
+      <div class="row"><span class="t">ไฟฟ้า</span><span class="v">ถึงหน้าแปลง</span></div>
+      <div class="row"><span class="t">ประปา</span><span class="v">ห่าง ~1 กม.</span></div>
+      <div class="row stk"><span class="t">ด้านหลัง</span><span class="v">ป่าชายเลน ต่อด้วยทะเลสาบสงขลา</span></div>
+      <div class="row stk"><span class="t">ระดับดิน</span><span class="v">ต่ำกว่าถนนราว 1.5 ม. น้ำไม่เคยท่วมในรอบ 39 ปี<span class="star">*</span></span></div>
+      <div class="row stk"><span class="t">เงื่อนไข</span><span class="v">แบ่งขายได้ · คุยเรื่องการชำระกับเจ้าของได้ · ยินดีรับนายหน้า 3%</span></div>
+    </div>
+
+    <p class="cap">ภาพตัดขวาง จากถนนถึงทะเลสาบ</p>
+    <div class="group xs">
+      <svg viewBox="0 0 330 128" role="img" aria-label="ถนนสูงกว่าแปลงราว 1.5 เมตร ด้านหลังเป็นป่าชายเลนและทะเลสาบ">
+        <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#30b0c7" stop-opacity=".6"/><stop offset="1" stop-color="#30b0c7" stop-opacity=".08"/></linearGradient></defs>
+        <path class="ground" d="M0 50 H42 L58 70 H200 L214 74 H262 L268 80 H330 V128 H0Z"/>
+        <rect x="268" y="80" width="62" height="22" fill="url(#wg)"/>
+        <path d="M268 80 H330" stroke="#30b0c7" stroke-width="1.5"/>
+        <path class="edge" d="M0 50 H42 L58 70 H200 L214 74 H262 L268 80" stroke-width="1.5"/>
+        <path d="M58 70 H200" stroke="#ffcc00" stroke-width="3.5" stroke-linecap="round"/>
+        <g fill="#34c759" opacity=".9"><circle cx="222" cy="64" r="8"/><circle cx="236" cy="61" r="10"/><circle cx="251" cy="65" r="8"/></g>
+        <path class="mut" d="M30 50 V70" stroke-dasharray="2 2"/><path class="mut" d="M26 70 H62" stroke-dasharray="2 2"/>
+        <g font-size="10" font-family="-apple-system,BlinkMacSystemFont,system-ui,sans-serif">
+          <text class="tx" x="21" y="64" text-anchor="end">1.5 ม.</text>
+          <text class="tx" x="2" y="42">ถนน 2002</text>
+          <text x="129" y="62" text-anchor="middle" fill="#d4a300" font-weight="600">แปลงนี้ ≈ 100 ม.</text>
+          <text x="238" y="44" text-anchor="middle" fill="#28a745">ป่าชายเลน</text>
+          <text x="299" y="118" text-anchor="middle" fill="#1f95ab">ทะเลสาบ</text>
+        </g>
+      </svg>
+    </div>
+    <p class="foot" style="padding-top:6px">แนวตั้งขยายให้เห็นชัด ไม่ตรงมาตราส่วน</p>
+
+    <p class="cap">แสงแดด</p>
+    <div class="suns">
+      <div><span>แดดตก <em id="sDate" style="font-style:normal"></em></span><b id="sSet">--:--</b><span id="sSetAz"></span></div>
+      <div><span>ดวงอาทิตย์ในฉาก</span><b id="sNow">--</b><span id="sNowAz"></span></div>
+    </div>
+    <p class="foot" style="padding-top:8px">แปลงหันหน้าลงทะเลสาบทางทิศใต้และตะวันตกเฉียงใต้ ปรับวันและเวลาได้จากปุ่มชั้นข้อมูลมุมขวาบน</p>
+
+    <p class="cap">ระยะทางโดยประมาณ</p>
+    <div class="group">
+      <div class="row"><span class="t">วัดพะโคะ</span><span class="v">5 กม.<span class="star">*</span></span></div>
+      <div class="row"><span class="t">จุดสร้างสะพานข้ามทะเลสาบ</span><span class="v">10 กม.<span class="star">*</span></span></div>
+      <div class="row"><span class="t">เกาะสี่ เกาะห้า (เส้นตรง)</span><span class="v" id="dIsl">-</span></div>
+      <div class="row"><span class="t">บ้านจัดสรร 40 ไร่ ฝั่งตรงข้าม</span><span class="v">อยู่ในแผน<span class="star">*</span></span></div>
+    </div>
+
+    <p class="cap">ภาพจริงหน้าแปลง</p>
+    <div class="photos">
+      <button data-src="a/road1.jpg" data-cap="ถนนคอนกรีตหน้าแปลง"><img src="a/road1.jpg" alt="ถนนคอนกรีตหน้าแปลง" loading="lazy"></button>
+      <button data-src="a/road2.jpg" data-cap="แนวหน้าแปลงติดถนน"><img src="a/road2.jpg" alt="แนวหน้าแปลงติดถนน" loading="lazy"></button>
+      <button data-src="a/wide.jpg" data-cap="ภายในแปลง มองไปทางทะเลสาบ"><img src="a/wide.jpg" alt="ภายในแปลง" loading="lazy"></button>
+      <button data-src="a/view-hills.jpg" data-cap="วิวแนวเขาฝั่งทะเลสาบ"><img src="a/view-hills.jpg" alt="วิวแนวเขา" loading="lazy"></button>
+    </div>
+
+    <p class="foot">ปุ่ม Google Maps ปักหมุดกลางแปลงโดยประมาณ ใช้นำทางมาถึงหน้าแปลงได้ ตำแหน่งและขอบเขตเป็นการประมาณ วาดจากเนื้อที่ในเอกสาร แนวเขตจริงตามการรังวัด ต้นไม้และหญ้าในฉากจัดวางตามภาพดาวเทียม<br><span class="star">*</span> ตามข้อมูลจากเจ้าของ<br>ภาพดาวเทียม Esri World Imagery (Esri, Maxar, Earthstar Geographics) อาจไม่ใช่สภาพล่าสุด</p>
+  </div>
+</aside>
+
+<div class="toast glass" id="hint" hidden>แตะจุดแรกบนแผนที่</div>
+<div class="credit">Esri · Maxar · Earthstar Geographics</div>
+
+<div id="walkUI" hidden>
+  <button id="walkX" class="glass">เสร็จ</button>
+  <div class="whint glass"><span>ลากเพื่อหันมอง</span><span class="desk">W A S D เดิน · Shift วิ่ง</span><span class="mob">ใช้ปุ่มซ้ายล่างเพื่อเดิน</span></div>
+  <div id="joy" class="glass" aria-label="ปุ่มเดิน"><i></i></div>
+</div>
+<div class="loading glass"><span class="spin"></span>กำลังสร้างหญ้า ต้นไม้ และทะเลสาบ</div>
+<div id="lb" hidden><button id="lbX">เสร็จ</button><figure style="margin:0"><img id="lbI" alt=""><p id="lbC"></p></figure></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Sky.js"></script>
+<script>
+(function(){
+const LAT=7.57459, LON=100.372486, TZ=7;
+const D2R=Math.PI/180, COSL=Math.cos(LAT*D2R);
+const MX=111320*COSL, MZ=110574;
+const ll=(la,lo)=>[(lo-LON)*MX,(LAT-la)*MZ];               // x=east, z=south (m)
+const ISL=ll(7.4728,100.2983), LAKE=ll(7.540,100.355), DIST=ll(7.4733,100.4383);
+const U=[0.938,0.346], N=[-0.346,0.938];
+const P=(a,b)=>[U[0]*a+N[0]*b, U[1]*a+N[1]*b];
+const toAB=(x,z)=>[x*U[0]+z*U[1], x*N[0]+z*N[1]];
+const B0=6, DEPTH=103;
+const CORN=[P(-75,B0),P(75,B0),P(75,B0+DEPTH),P(-75,B0+DEPTH)];
+const C=P(0,B0+DEPTH/2);
+const inPlot=(x,z)=>{const [a,b]=toAB(x,z);return Math.abs(a)<=75&&b>=B0&&b<=B0+DEPTH};
+const touch=matchMedia('(pointer:coarse)').matches;
+const Q=touch?{gIn:1.35,gOut:3.2,gR:150,trees:3200,tStep:7,sh:1024,clouds:28}:{gIn:.9,gOut:2.0,gR:230,trees:9000,tStep:5.5,sh:2048,clouds:46};
+const cl=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const ss=(a,b,x)=>{x=cl((x-a)/(b-a));return x*x*(3-2*x)};
+const mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
+let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+
+// ---- road level: concrete road ~1.5 m above the plot ----
+const ROAD_A=620,ROAD_TOP=3.5,ROAD_FOOT=5.6,ROAD_H=1.5;
+function groundY(x,z){const [a,b]=toAB(x,z);if(Math.abs(a)>ROAD_A)return 0;const t=ss(ROAD_A,ROAD_A-60,Math.abs(a));const ab=Math.abs(b);
+  if(ab<=ROAD_TOP)return ROAD_H*t;if(ab<ROAD_FOOT)return ROAD_H*t*(ROAD_FOOT-ab)/(ROAD_FOOT-ROAD_TOP);return 0}
+
+// ---- renderer ----
+const cv=document.getElementById('c');
+const R=new THREE.WebGLRenderer({canvas:cv,antialias:true,logarithmicDepthBuffer:true,powerPreference:'high-performance'});
+R.setPixelRatio(Math.min(devicePixelRatio,touch?1.6:2));
+R.outputEncoding=THREE.sRGBEncoding;R.toneMapping=THREE.ACESFilmicToneMapping;R.toneMappingExposure=.62;
+R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;
+const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0xaabbcc,1e-4);
+const cam=new THREE.PerspectiveCamera(50,1,.5,400000);cam.rotation.order='YXZ';
+const ctl=new THREE.OrbitControls(cam,cv);
+ctl.enableDamping=true;ctl.dampingFactor=.08;ctl.maxPolarAngle=88*D2R;ctl.minDistance=12;ctl.maxDistance=90000;ctl.screenSpacePanning=false;
+const timeU={value:0};
+
+// ---- sky ----
+const sky=new THREE.Sky();sky.scale.setScalar(300000);sky.material.depthTest=false;sky.material.depthWrite=false;sky.renderOrder=-10;sky.frustumCulled=false;scene.add(sky);
+const su=sky.material.uniforms;su.turbidity.value=5.5;su.rayleigh.value=1.5;su.mieCoefficient.value=.006;su.mieDirectionalG.value=.84;
+
+// ---- lights ----
+const hemi=new THREE.HemisphereLight(0xcfe0ff,0x4b4a30,.6);scene.add(hemi);
+const sunL=new THREE.DirectionalLight(0xffffff,2.4);sunL.castShadow=true;
+sunL.shadow.mapSize.set(Q.sh,Q.sh);const sc=sunL.shadow.camera;sc.left=-260;sc.right=260;sc.top=260;sc.bottom=-260;sc.near=10;sc.far=5000;
+sunL.shadow.bias=-.0004;sunL.shadow.normalBias=.4;scene.add(sunL,sunL.target);
+
+// ---- lake water ----
+const waterU={uTime:timeU,sunDir:{value:new THREE.Vector3(0,1,0)},sunCol:{value:new THREE.Color()},skyTop:{value:new THREE.Color()},skyHor:{value:new THREE.Color()},deep:{value:new THREE.Color()},fogC:{value:new THREE.Color()},fogD:{value:1e-4}};
+const water=new THREE.Mesh(new THREE.PlaneGeometry(400000,400000).rotateX(-Math.PI/2),new THREE.ShaderMaterial({uniforms:waterU,transparent:true,depthWrite:false,
+vertexShader:`varying vec3 vW;
+#include <common>
+#include <logdepthbuf_pars_vertex>
+void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;
+#include <logdepthbuf_vertex>
+}`,
+fragmentShader:`uniform float uTime;uniform vec3 sunDir;uniform vec3 sunCol;uniform vec3 skyTop;uniform vec3 skyHor;uniform vec3 deep;uniform vec3 fogC;uniform float fogD;varying vec3 vW;
+#include <common>
+#include <logdepthbuf_pars_fragment>
+float gDist;
+vec2 wv(vec2 p,vec2 d,float f,float a,float s){float k=clamp(1.-gDist*f*.006,0.,1.);return d*f*a*k*cos(dot(d,p)*f+uTime*s);}
+void main(){
+#include <logdepthbuf_fragment>
+vec2 p=vW.xz;float dist=distance(vW,cameraPosition);gDist=dist;
+vec2 g=wv(p,normalize(vec2(1.,.3)),.32,.28,1.1)+wv(p,normalize(vec2(-.4,1.)),.61,.16,1.6)+wv(p,normalize(vec2(.8,-.6)),1.17,.08,2.2)
+ +wv(p,normalize(vec2(-1.,-.25)),2.3,.035,3.1)+wv(p,normalize(vec2(.3,.95)),4.3,.016,4.2)+wv(p,normalize(vec2(.9,.4)),8.1,.007,5.6);
+vec3 n=normalize(vec3(-g.x,1.,-g.y));n=normalize(mix(n,vec3(0.,1.,0.),clamp(dist/9000.,0.,.6)));
+vec3 v=normalize(cameraPosition-vW);float fr=.03+.97*pow(1.-clamp(dot(n,v),0.,1.),5.);
+vec3 r=reflect(-v,n);r.y=abs(r.y);vec3 sk=mix(skyHor,skyTop,pow(clamp(r.y,0.,1.),.5));
+float sd=max(dot(r,sunDir),0.);vec3 col=mix(deep,sk,fr)+sunCol*(pow(sd,900.)*12.+pow(sd,90.)*.5+pow(sd,12.)*.06);
+float f=1.-exp(-pow(dist*fogD,2.));col=mix(col,fogC,clamp(f,0.,1.));
+gl_FragColor=vec4(col,1.);
+#include <tonemapping_fragment>
+#include <encodings_fragment>
+}`}));
+water.position.y=-.25;water.renderOrder=-1;water.frustumCulled=false;scene.add(water);
+
+// ---- satellite ground, with the lake cut out so the 3D water shows ----
+const META={12:{ox:815616,oy:500736,w:2048,h:2816},14:{ox:3265536,oy:2007296,w:2048,h:2816},17:{ox:26131712,oy:16067840,w:1792,h:2560}};
+function wp(la,lo,z){const n=256*Math.pow(2,z);return [(lo+180)/360*n,(1-Math.asinh(Math.tan(la*D2R))/Math.PI)/2*n]}
+const ASSET=window.LAND_ASSETS||{};const asset=n=>ASSET[n]||('a/'+n);
+const loadImg=src=>new Promise((res,rej)=>{const i=new Image();if(/^https?:/.test(src))i.crossOrigin='anonymous';i.onload=()=>res(i);i.onerror=rej;i.src=src});
+const isWater=(r,g,b)=>{const l=(r+g+b)/3,gb=g-b;return l>105&&l<196&&Math.abs(r-g)<14&&gb>=20&&gb<=52};
+function classify(img,cell,blurR,edge){
+  const W=Math.round(img.width/cell),H=Math.round(img.height/cell),n=W*H;
+  const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(img,0,0,W,H);
+  const d=x.getImageData(0,0,W,H).data,w=new Uint8Array(n);
+  for(let i=0;i<n;i++)w[i]=isWater(d[i*4],d[i*4+1],d[i*4+2])?1:0;
+  // land pockets fully surrounded by lake (cloud blobs over water) become water
+  const seen=new Uint8Array(n),q=new Int32Array(n);
+  for(let s=0;s<n;s++){if(w[s]||seen[s])continue;let h=0,t=0,border=false;q[t++]=s;seen[s]=1;
+    while(h<t){const i=q[h++],ix=i%W,iy=(i/W)|0;if(ix==0||iy==0||ix==W-1||iy==H-1)border=true;
+      const nb=[ix>0?i-1:-1,ix<W-1?i+1:-1,iy>0?i-W:-1,iy<H-1?i+W:-1];for(const j of nb)if(j>=0&&!w[j]&&!seen[j]){seen[j]=1;q[t++]=j}}
+    if(!border&&t<n*.03)for(let k=0;k<t;k++)w[q[k]]=1}
+  // thin beige strips (roads, yards) stay land
+  let f=Float32Array.from(w);const tmp=new Float32Array(n);
+  for(let pass=0;pass<2;pass++){const src=pass?tmp:f,dst=pass?f:tmp;
+    for(let iy=0;iy<H;iy++)for(let ix=0;ix<W;ix++){let s=0,c2=0;for(let k=-blurR;k<=blurR;k++){const xx=pass?ix:ix+k,yy=pass?iy+k:iy;if(xx<0||yy<0||xx>=W||yy>=H)continue;s+=src[yy*W+xx];c2++}dst[iy*W+ix]=s/c2}}
+  const out=x.createImageData(W,H);
+  for(let i=0;i<n;i++){const u=((i%W)+.5)/W,v=(((i/W)|0)+.5)/H,e=Math.min(u,1-u,v,1-v);
+    const a=(1-ss(.5,.78,f[i]))*(edge>0?ss(0,edge,e):1)*255;out.data[i*4]=out.data[i*4+1]=out.data[i*4+2]=a;out.data[i*4+3]=255}
+  x.putImageData(out,0,0);return {canvas:c,water:f,W,H}
+}
+const LAY=[[12,4,2,.1],[14,4,2,.05],[17,4,3,.07]];
+const layers={};
+const ready=Promise.all(LAY.map(async([z,cell,blurR,edge],i)=>{
+  const img=await loadImg(asset(`z${z}.jpg`));const m=META[z],mpp=156543.03392*COSL/Math.pow(2,z);
+  const [gx,gy]=wp(LAT,LON,z),px=gx-m.ox,py=gy-m.oy;
+  const k=classify(img,cell,blurR,edge);
+  const tex=new THREE.Texture(img);tex.encoding=THREE.sRGBEncoding;tex.anisotropy=R.capabilities.getMaxAnisotropy();tex.needsUpdate=true;
+  const am=new THREE.CanvasTexture(k.canvas);
+  const mat=new THREE.MeshLambertMaterial({map:tex,alphaMap:am,transparent:true,depthWrite:false});
+  const g=new THREE.PlaneGeometry(img.width*mpp,img.height*mpp);g.rotateX(-Math.PI/2);
+  const mesh=new THREE.Mesh(g,mat);mesh.position.set((img.width/2-px)*mpp,0,(img.height/2-py)*mpp);mesh.renderOrder=i;mesh.frustumCulled=false;mesh.receiveShadow=z>=14;
+  scene.add(mesh);layers[z]={img,mpp,px,py,k,cell};
+}));
+
+// ---- road slab ----
+(function(){const pos=[],idx=[],prof=[[-ROAD_FOOT,0],[-ROAD_TOP,1],[ROAD_TOP,1],[ROAD_FOOT,0]];let row=0;
+  for(let a=-ROAD_A;a<=ROAD_A;a+=10){const t=ss(ROAD_A,ROAD_A-60,Math.abs(a));for(const [b,h] of prof){const p=P(a,b);pos.push(p[0],ROAD_H*t*h+.02,p[1])}
+    if(row>0){const o=(row-1)*4;for(let k=0;k<3;k++)idx.push(o+k,o+k+4,o+k+1,o+k+1,o+k+4,o+k+5)}row++}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();
+  const road=new THREE.Mesh(g,new THREE.MeshLambertMaterial({color:0xb9b5aa,side:THREE.DoubleSide}));road.receiveShadow=true;scene.add(road);
+  [-3.1,3.1].forEach(b=>{const lp=[],li=[];let r2=0;for(let a=-ROAD_A+60;a<=ROAD_A-60;a+=10){[b-.08,b+.08].forEach(bb=>{const p=P(a,bb);lp.push(p[0],ROAD_H+.05,p[1])});if(r2>0){const o=(r2-1)*2;li.push(o,o+2,o+1,o+1,o+2,o+3)}r2++}
+    const lg=new THREE.BufferGeometry();lg.setAttribute('position',new THREE.Float32BufferAttribute(lp,3));lg.setIndex(li);
+    scene.add(new THREE.Mesh(lg,new THREE.MeshBasicMaterial({color:0xe9e7df,side:THREE.DoubleSide})))});
+})();
+
+// ---- grass & trees from what the satellite shows ----
+const veg=new THREE.Group();scene.add(veg);const grassGlow=new THREE.Color(0,0,0);
+function grassGeo(W0=.022,W1=.022,NB=7){const pos=[],col=[],nor=[],idx=[];
+  for(let k=0;k<NB;k++){const a=rnd()*Math.PI*2,ox=(rnd()-.5)*.7,oz=(rnd()-.5)*.7,h=.55+rnd()*.65,w=W0+rnd()*W1,lean=(rnd()-.5)*.5,ca=Math.cos(a),sa=Math.sin(a),base=pos.length/3;
+    [[0,w],[.5,w*.75],[1,0]].forEach(([t,ww])=>{const y=t*h,l=lean*t*t*h,cx=ox+l*sa,cz=oz+l*ca,sh=.35+.65*t;
+      if(ww>0){pos.push(cx-ca*ww,y,cz+sa*ww,cx+ca*ww,y,cz-sa*ww);col.push(sh,sh,sh,sh,sh,sh);nor.push(0,1,0,0,1,0)}else{pos.push(cx,y,cz);col.push(1,1,1);nor.push(0,1,0)}});
+    idx.push(base,base+1,base+2,base+1,base+3,base+2,base+2,base+3,base+4)}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));g.setIndex(idx);return g}
+function blobGeo(){const parts=[[0,0,0,1],[.55,-.15,.2,.72],[-.5,-.1,-.25,.75],[.1,.35,-.45,.62],[-.2,-.25,.55,.6]];const pos=[],nor=[];
+  for(const [ox,oy,oz,r] of parts){const g=new THREE.IcosahedronGeometry(1,3);const p=g.attributes.position;
+    for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i);const f=1+.13*Math.sin(5.1*x+1.3+ox*7)*Math.sin(4.7*y+.4)*Math.sin(5.3*z+2.1)+.06*Math.sin(11*x+9*z+oy*5);
+      pos.push(ox+x*f*r,oy+y*f*r*.85,oz+z*f*r);const n=new THREE.Vector3(x,y*1.1,z).normalize();nor.push(n.x,n.y,n.z)}}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));g.scale(.78,.78,.78);return g}
+const wind=s=>{s.uniforms.uTime=timeU;s.vertexShader='uniform float uTime;\n'+s.vertexShader.replace('#include <begin_vertex>',`vec3 transformed=vec3(position);
+#ifdef USE_INSTANCING
+vec3 ip=vec3(instanceMatrix[3][0],instanceMatrix[3][1],instanceMatrix[3][2]);
+#else
+vec3 ip=vec3(0.);
+#endif
+float hh=max(position.y,0.);hh*=hh;
+transformed*=smoothstep(.7,1.8,length(ip.xz-cameraPosition.xz)+max(cameraPosition.y-3.,0.));
+transformed.x+=(sin(uTime*1.7+ip.x*.13+ip.z*.07)+.45*sin(uTime*3.1+ip.z*.29))*.10*hh;
+transformed.z+=cos(uTime*1.3+ip.x*.11)*.07*hh;`)};
+const treeWind=s=>{s.uniforms.uTime=timeU;s.vertexShader='uniform float uTime;\n'+s.vertexShader.replace('#include <begin_vertex>',`vec3 transformed=vec3(position);
+#ifdef USE_INSTANCING
+vec3 ip=vec3(instanceMatrix[3][0],instanceMatrix[3][1],instanceMatrix[3][2]);
+#else
+vec3 ip=vec3(0.);
+#endif
+transformed.x+=sin(uTime*.9+ip.x*.05+ip.z*.03)*.035*(position.y+1.);`)};
+const col=new THREE.Color();
+ready.then(()=>{
+  const L=layers[17],img=L.img,W=img.width,H=img.height;
+  const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(img,0,0);const D=x.getImageData(0,0,W,H).data;
+  const pix=(wx,wz)=>{const px=Math.round(L.px+wx/L.mpp),py=Math.round(L.py+wz/L.mpp);if(px<0||py<0||px>=W||py>=H)return null;const i=(py*W+px)*4;return [D[i],D[i+1],D[i+2]]};
+  const wat=(wx,wz)=>{const k=L.k,cx=Math.floor((L.px+wx/L.mpp)/L.cell),cy=Math.floor((L.py+wz/L.mpp)/L.cell);if(cx<0||cy<0||cx>=k.W||cy>=k.H)return true;return k.water[cy*k.W+cx]>.5};
+  const onRoad=(wx,wz)=>{const [a,b]=toAB(wx,wz);return Math.abs(a)<ROAD_A&&Math.abs(b)<ROAD_FOOT+.6};
+  // detailed ground texture near the plot (fades into the satellite image)
+  {const S=680,RES=touch?1024:2048;const gc=document.createElement('canvas');gc.width=gc.height=RES;const gx=gc.getContext('2d');const id=gx.createImageData(RES,RES),dd=id.data;
+   const NG=128,ng=new Float32Array(NG*NG).map(()=>rnd());const vn=(x,y)=>{const xi=Math.floor(x),yi=Math.floor(y),fx=x-xi,fy=y-yi,i0=((yi%NG+NG)%NG)*NG,i1=(((yi+1)%NG+NG)%NG)*NG,x0=(xi%NG+NG)%NG,x1=(x0+1)%NG;
+     const sx=fx*fx*(3-2*fx),sy=fy*fy*(3-2*fy);return (ng[i0+x0]*(1-sx)+ng[i0+x1]*sx)*(1-sy)+(ng[i1+x0]*(1-sx)+ng[i1+x1]*sx)*sy};
+   for(let j=0;j<RES;j++)for(let i=0;i<RES;i++){const wx=C[0]-S/2+(i+.5)/RES*S,wz=C[1]-S/2+(j+.5)/RES*S,o=(j*RES+i)*4;
+     const r=Math.hypot(wx-C[0],wz-C[1]);let al=(1-ss(190,330,r));if(al<=0||wat(wx,wz)){dd[o+3]=0;continue}
+     const p=pix(wx,wz)||[80,90,60];const n1=vn(wx*.9,wz*.9),n2=vn(wx*3.7+50,wz*3.7),n3=vn(wx*.12+9,wz*.12);
+     const dry=ss(.45,.8,n3*.7+n1*.3),soil=ss(.78,.92,n1*.6+n2*.4)*.6;
+     let cr=60+40*dry+n2*26,cg=88+30*dry+n2*30,cb=34+18*dry+n2*12;cr=cr*(1-soil)+118*soil;cg=cg*(1-soil)+100*soil;cb=cb*(1-soil)+70*soil;
+     const k=.35;dd[o]=cr*(1-k)+p[0]*1.25*k;dd[o+1]=cg*(1-k)+p[1]*1.25*k;dd[o+2]=cb*(1-k)+p[2]*1.25*k;dd[o+3]=al*255}
+   gx.putImageData(id,0,0);const t=new THREE.CanvasTexture(gc);t.encoding=THREE.sRGBEncoding;t.anisotropy=R.capabilities.getMaxAnisotropy();
+   const g=new THREE.PlaneGeometry(S,S);g.rotateX(-Math.PI/2);const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({map:t,transparent:true,depthWrite:false}));
+   m.position.set(C[0],.03,C[1]);m.renderOrder=3;m.receiveShadow=true;m.frustumCulled=false;scene.add(m)}
+  // grass
+  const G=[];const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),sv=new THREE.Vector3(),pv=new THREE.Vector3();
+  const addG=(wx,wz,s,tall)=>{const p=pix(wx,wz);if(!p)return;const lum=(p[0]+p[1]+p[2])/3;
+    if(!tall&&(p[1]<p[0]-4||lum>150))return;G.push([wx,wz,s,p])};
+  for(let a=-75;a<=75;a+=Q.gIn)for(let b=B0+.6;b<=B0+DEPTH;b+=Q.gIn){const j=P(a+(rnd()-.5)*Q.gIn,b+(rnd()-.5)*Q.gIn);addG(j[0],j[1],.9+rnd()*.55,true)}
+  for(let gx=-Q.gR;gx<=Q.gR;gx+=Q.gOut)for(let gz=-Q.gR;gz<=Q.gR;gz+=Q.gOut){if(gx*gx+gz*gz>Q.gR*Q.gR)continue;
+    const wx=C[0]+gx+(rnd()-.5)*Q.gOut,wz=C[1]+gz+(rnd()-.5)*Q.gOut;if(inPlot(wx,wz)||onRoad(wx,wz)||wat(wx,wz))continue;addG(wx,wz,.8+rnd()*.6,false)}
+  const gm=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});gm.emissive=grassGlow;gm.onBeforeCompile=wind;
+  const grass=new THREE.InstancedMesh(grassGeo(),gm,G.length);grass.frustumCulled=false;grass.receiveShadow=true;
+  G.forEach(([wx,wz,s,p],i)=>{e.set(0,rnd()*Math.PI*2,0);q.setFromEuler(e);sv.set(s,s*(.85+rnd()*.35),s);pv.set(wx,groundY(wx,wz),wz);m4.compose(pv,q,sv);grass.setMatrixAt(i,m4);
+    const dry=rnd();col.setHSL(.17+.08*rnd()-dry*.05,.38+.2*rnd(),.32+.14*rnd()+dry*.06);col.convertSRGBToLinear();grass.setColorAt(i,col)});
+  veg.add(grass);
+  // trees, shrubs, mangrove
+  const T=[];const RT=1150;
+  for(let gx=-RT;gx<=RT;gx+=Q.tStep)for(let gz=-RT;gz<=RT;gz+=Q.tStep){if(gx*gx+gz*gz>RT*RT)continue;
+    const wx=C[0]+gx+(rnd()-.5)*Q.tStep*.9,wz=C[1]+gz+(rnd()-.5)*Q.tStep*.9;if(onRoad(wx,wz)||wat(wx,wz))continue;
+    const p=pix(wx,wz);if(!p)continue;const lum=(p[0]+p[1]+p[2])/3;const [a,b]=toAB(wx,wz);
+    if(inPlot(wx,wz)){const r=rnd();if(r<.05)T.push([wx,wz,4+rnd()*3,p,1]);else if(r<.32)T.push([wx,wz,1+rnd()*1.3,p,0]);continue}
+    const mangrove=Math.abs(a)<260&&b>B0+DEPTH&&b<B0+DEPTH+45;
+    if(mangrove){if(rnd()<.85)T.push([wx,wz,3.5+rnd()*3,p,2]);continue}
+    if(lum<100&&p[1]>p[0]+2&&p[1]>p[2]+8&&rnd()<.6)T.push([wx,wz,5+rnd()*6,p,1])}
+  T.sort((u,v)=>Math.hypot(u[0]-C[0],u[1]-C[1])-Math.hypot(v[0]-C[0],v[1]-C[1]));T.length=Math.min(T.length,Q.trees);
+  const cm=new THREE.MeshLambertMaterial();cm.onBeforeCompile=treeWind;
+  const crowns=new THREE.InstancedMesh(blobGeo(),cm,T.length);crowns.castShadow=true;crowns.receiveShadow=true;crowns.frustumCulled=false;
+  const trunks=new THREE.InstancedMesh(new THREE.CylinderGeometry(.11,.2,1,6).translate(0,.5,0),new THREE.MeshLambertMaterial({color:0x4a3b2c}),T.length);trunks.castShadow=true;trunks.frustumCulled=false;
+  T.forEach(([wx,wz,h,p,kind],i)=>{const y0=groundY(wx,wz);const r=kind==0?h*.55:h*(kind==2?.38:.32)*(.8+rnd()*.4);const cy=kind==0?r*.6:h-r*.55;
+    e.set(0,rnd()*Math.PI*2,0);q.setFromEuler(e);
+    m4.compose(pv.set(wx,y0+cy,wz),q,sv.set(r*(.9+rnd()*.3),r,r*(.9+rnd()*.3)));crowns.setMatrixAt(i,m4);
+    m4.compose(pv.set(wx,y0,wz),q,kind==0?sv.set(0,0,0):sv.set(h/7,h-r*.6,h/7));trunks.setMatrixAt(i,m4);
+    col.setRGB(p[0]/255,p[1]/255,p[2]/255);const hsl={};col.getHSL(hsl);
+    col.setHSL(kind==2?.27+rnd()*.04:.22+rnd()*.07,cl(.38+hsl.s*.4+rnd()*.1),cl((kind==0?.26:.18)+hsl.l*.3+rnd()*.06));col.convertSRGBToLinear();crowns.setColorAt(i,col)});
+  veg.add(crowns,trunks);
+  document.body.classList.add('loaded');
+});
+
+
+// ---- dense grass around the viewer (walk mode) ----
+const NGST=touch?.4:.3;const nearGrass=(()=>{const st=NGST,RAD=touch?16:24,offs=[];for(let x=-RAD;x<=RAD;x+=st)for(let z=-RAD;z<=RAD;z+=st)if(x*x+z*z<=RAD*RAD)offs.push([x,z]);
+  const m=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});m.emissive=grassGlow;
+  m.onBeforeCompile=s=>{s.uniforms.uTime=timeU;s.uniforms.uRad={value:RAD};s.vertexShader='uniform float uTime;uniform float uRad;\n'+s.vertexShader
+   .replace('#include <color_vertex>',`#include <color_vertex>
+    vec3 ipc=vec3(instanceMatrix[3][0],0.,instanceMatrix[3][2])+vec3(modelMatrix[3][0],0.,modelMatrix[3][2]);
+    float hc=fract(sin(dot(ipc.xz,vec2(41.3,17.7)))*9137.1);
+    vColor.rgb*=mix(vec3(.34,.50,.12),vec3(.70,.68,.30),hc*hc)*1.5;`)
+   .replace('#include <begin_vertex>',`vec3 ip=vec3(instanceMatrix[3][0],0.,instanceMatrix[3][2])+vec3(modelMatrix[3][0],0.,modelMatrix[3][2]);
+    float h1=fract(sin(dot(ip.xz,vec2(12.9898,78.233)))*43758.5453),h2=fract(sin(dot(ip.xz,vec2(39.3468,11.135)))*24634.6345);
+    float ang=h1*6.2831;vec3 transformed=vec3(position);transformed.xz=mat2(cos(ang),-sin(ang),sin(ang),cos(ang))*transformed.xz;
+    float ab=ip.x*${N[0].toFixed(4)}+ip.z*${N[1].toFixed(4)};float aa=ip.x*${U[0].toFixed(4)}+ip.z*${U[1].toFixed(4)};
+    float road=(abs(ab)<${(ROAD_FOOT+.4).toFixed(2)}&&abs(aa)<${ROAD_A.toFixed(1)})?0.:1.;
+    float dcam=length(ip.xz-cameraPosition.xz);float fade=1.-smoothstep(uRad*.7,uRad,dcam);
+    transformed*=(.7+h2*.75)*road*fade*smoothstep(.5,1.4,dcam);transformed.xz+=(vec2(h2,h1)-.5)*${NGST.toFixed(2)};
+    float hh=max(position.y,0.);hh*=hh;
+    transformed.x+=(sin(uTime*1.7+ip.x*.13+ip.z*.07)+.45*sin(uTime*3.1+ip.z*.29))*.10*hh;transformed.z+=cos(uTime*1.3+ip.x*.11)*.07*hh;`)};
+  const g=grassGeo(.035,.03,9);const im=new THREE.InstancedMesh(g,m,offs.length);const m4=new THREE.Matrix4();offs.forEach(([x,z],i)=>{m4.makeTranslation(x,0,z);im.setMatrixAt(i,m4)});
+  im.frustumCulled=false;im.receiveShadow=true;im.visible=false;scene.add(im);return im})();
+
+// ---- clouds ----
+const cloudTex=(()=>{const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');
+  for(let i=0;i<34;i++){const px=128+(rnd()-.5)*150,py=140+(rnd()-.5)*70,r=26+rnd()*48;const g=x.createRadialGradient(px,py,0,px,py,r);
+    g.addColorStop(0,'rgba(255,255,255,.55)');g.addColorStop(.6,'rgba(255,255,255,.25)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(0,0,256,256)}
+  const sh=x.createLinearGradient(0,90,0,230);sh.addColorStop(0,'rgba(0,0,0,0)');sh.addColorStop(1,'rgba(70,80,100,.35)');x.globalCompositeOperation='source-atop';x.fillStyle=sh;x.fillRect(0,0,256,256);
+  const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t})();
+const clouds=new THREE.Group();scene.add(clouds);const cloudMats=[];
+for(let i=0;i<Q.clouds;i++){const g=new THREE.Group();const ang=rnd()*Math.PI*2,rad=600+rnd()*14000;g.position.set(C[0]+Math.cos(ang)*rad,700+rnd()*900,C[1]+Math.sin(ang)*rad);
+  const n=5+Math.floor(rnd()*6),big=1+rnd()*1.4;
+  for(let k=0;k<n;k++){const m=new THREE.SpriteMaterial({map:cloudTex,transparent:true,depthWrite:false,fog:false,opacity:.75+rnd()*.25});cloudMats.push(m);
+    const s=new THREE.Sprite(m);const sz=(260+rnd()*320)*big;s.scale.set(sz,sz*.6,1);s.position.set((rnd()-.5)*420*big,(rnd()-.3)*70,(rnd()-.5)*300*big);s.renderOrder=20;g.add(s)}
+  clouds.add(g)}
+
+const sunGlow=(()=>{const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d'),g=x.createRadialGradient(128,128,0,128,128,128);
+  g.addColorStop(0,'rgba(255,255,245,1)');g.addColorStop(.07,'rgba(255,248,220,1)');g.addColorStop(.12,'rgba(255,215,150,.55)');g.addColorStop(.35,'rgba(255,170,90,.16)');g.addColorStop(1,'rgba(255,150,80,0)');x.fillStyle=g;x.fillRect(0,0,256,256);
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false,depthTest:false,fog:false,blending:THREE.AdditiveBlending,toneMapped:false}));s.renderOrder=-5;scene.add(s);return s})();
+// ---- overlays ----
+const groups={plot:new THREE.Group(),dim:new THREE.Group(),split:new THREE.Group(),field:new THREE.Group(),sun:new THREE.Group(),measure:new THREE.Group()};
+Object.values(groups).forEach(g=>scene.add(g));
+const STAKE=0xf2c14e;
+const v3=(p,y=0)=>new THREE.Vector3(p[0],y,p[1]);
+function line(pts,color,g,opacity=1,y=.4){const geo=new THREE.BufferGeometry().setFromPoints(pts.map(p=>v3(p,y)));const l=new THREE.Line(geo,new THREE.LineBasicMaterial({color,transparent:true,opacity,depthTest:false,fog:false}));l.renderOrder=30;g.add(l);return l}
+function fill(pts,color,opacity,g){const s=new THREE.Shape(pts.map(p=>new THREE.Vector2(p[0],-p[1])));const geo=new THREE.ShapeGeometry(s);geo.rotateX(-Math.PI/2);
+  const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,side:THREE.DoubleSide,fog:false}));m.position.y=.15;m.renderOrder=5;g.add(m);return m}
+fill(CORN,STAKE,.13,groups.plot);
+const ROPE=1.1;
+line([...CORN,CORN[0]],STAKE,groups.plot,1,ROPE);
+CORN.forEach(p=>{const post=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,1.6,8),new THREE.MeshLambertMaterial({color:0xe8e2d0}));post.position.set(p[0],.8,p[1]);post.castShadow=true;groups.plot.add(post);
+  const cap=new THREE.Mesh(new THREE.CylinderGeometry(.11,.11,.35,8),new THREE.MeshBasicMaterial({color:STAKE}));cap.position.set(p[0],1.5,p[1]);groups.plot.add(cap)});
+// stakes every 25 m along the boundary
+CORN.forEach((p,i)=>{const q2=CORN[(i+1)%4],len=Math.hypot(q2[0]-p[0],q2[1]-p[1]);for(let d=25;d<len-5;d+=25){const t=d/len,x=p[0]+(q2[0]-p[0])*t,z=p[1]+(q2[1]-p[1])*t;
+  const s=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,1.2,6),new THREE.MeshLambertMaterial({color:0xe8e2d0}));s.position.set(x,.6,z);s.castShadow=true;groups.plot.add(s)}});
+function dimLine(a,b,off,g){const n=[-(b[1]-a[1]),b[0]-a[0]],l=Math.hypot(...n);const o=[n[0]/l*off,n[1]/l*off];
+  const A=[a[0]+o[0],a[1]+o[1]],Bp=[b[0]+o[0],b[1]+o[1]];line([A,Bp],STAKE,g,.95,2.2);
+  [A,Bp].forEach(p=>line([[p[0]-o[0]*.5,p[1]-o[1]*.5],[p[0]+o[0]*.25,p[1]+o[1]*.25]],STAKE,g,.95,2.2));return [(A[0]+Bp[0])/2,(A[1]+Bp[1])/2]}
+const dimF=dimLine(CORN[1],CORN[0],-3,groups.dim);
+const dimS=dimLine(CORN[2],CORN[1],-6,groups.dim);
+[-25,25].forEach(a=>line([P(a,B0),P(a,B0+DEPTH)],0xffffff,groups.split,.95,1));
+const lotC=[-50,0,50].map(a=>P(a,B0+DEPTH/2));
+(function(){const h=52.5,w=34,c=B0+DEPTH/2;const F=[[-h,-w],[h,-w],[h,w],[-h,w]].map(([a,b])=>P(a,c+b));
+  fill(F,0x7fd08a,.25,groups.field);line([...F,F[0]],0xffffff,groups.field,.95,1);line([P(0,c-w),P(0,c+w)],0xffffff,groups.field,.8,1);
+  const circ=[];for(let k=0;k<=40;k++){const t=k/40*Math.PI*2;circ.push(P(9.15*Math.cos(t),c+9.15*Math.sin(t)))}line(circ,0xffffff,groups.field,.8,1);})();
+const sunLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),new THREE.LineDashedMaterial({color:0xffb067,dashSize:18,gapSize:12,transparent:true,opacity:.95,depthTest:false,fog:false}));
+sunLine.renderOrder=31;groups.sun.add(sunLine);
+
+// ---- labels ----
+const LBox=document.getElementById('labels');const labels=[];
+function label(html,pos,cls,minD,maxD,layer,y=0){const el=document.createElement('div');el.className='lab '+(cls||'');el.innerHTML=`<div class="in">${html}</div>`;LBox.appendChild(el);
+  const L={el,p:new THREE.Vector3(pos[0],y,pos[1]),minD,maxD,layer};labels.push(L);return L}
+label('<div class="tag">แปลงนี้ 9-2-50 ไร่<small>ตำแหน่งโดยประมาณ</small></div><div class="stem"></div><div class="dot"></div>',C,'pin',40,60000,'plot',2);
+label('ถนนสาย 2002',P(-150,0),'',0,2600,null,2);
+label('ถนนสาย 2002',P(260,0),'',300,5000,null,2);
+label('ป่าชายเลน',P(10,B0+DEPTH+24),'mang',0,3000,null,8);
+label('ทะเลสาบสงขลา',LAKE,'water',600,150000,null);
+label(`เกาะสี่ เกาะห้า<small>${(Math.hypot(...ISL)/1000).toFixed(1)} กม. จากแปลง</small>`,ISL,'',2000,150000,null);
+label('อ.สทิงพระ<small>ตัวอำเภอโดยประมาณ</small>',DIST,'',4000,150000,null);
+label('หน้ากว้าง ≈ 150 ม.',dimF,'dim',0,1400,'dim',2.2);
+label('ลึกเฉลี่ย ≈ 103 ม.',dimS,'dim',0,1400,'dim',2.2);
+['ก','ข','ค'].forEach((k,i)=>label(`แปลง ${k}<small>หน้า 50 ม. · ≈ 1,283 ตร.ว.</small>`,lotC[i],'',0,1500,'split',1.5));
+label('สนามฟุตบอล 105 × 68 ม.',P(0,B0+DEPTH/2-40),'',0,1500,'field',1.5);
+const sunLab=label('ทิศพระอาทิตย์',[0,0],'sun',0,80000,'sun');
+document.getElementById('dIsl').textContent='≈ '+(Math.hypot(...ISL)/1000).toFixed(0)+' กม.';
+
+// ---- sun (NOAA) ----
+function sunPos(doy,hr){const g=2*Math.PI/365*(doy-1+(hr-12)/24);
+  const eq=229.18*(.000075+.001868*Math.cos(g)-.032077*Math.sin(g)-.014615*Math.cos(2*g)-.040849*Math.sin(2*g));
+  const dc=.006918-.399912*Math.cos(g)+.070257*Math.sin(g)-.006758*Math.cos(2*g)+.000907*Math.sin(2*g)-.002697*Math.cos(3*g)+.00148*Math.sin(3*g);
+  const tst=hr*60+eq+4*LON-60*TZ,ha=(tst/4-180)*D2R,la=LAT*D2R;
+  const cz=Math.sin(la)*Math.sin(dc)+Math.cos(la)*Math.cos(dc)*Math.cos(ha);const el=Math.asin(cl(cz,-1,1));
+  const az=Math.atan2(Math.sin(ha),Math.cos(ha)*Math.sin(la)-Math.tan(dc)*Math.cos(la))+Math.PI;return {el:el/D2R,az:(az/D2R+360)%360}}
+function sunset(doy){let a=15,b=20;for(let i=0;i<40;i++){const m=(a+b)/2;sunPos(doy,m).el>-.833?a=m:b=m}return a}
+const hhmm=h=>{const m=Math.round(h*60);return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')};
+const MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const doyLabel=d=>{const t=new Date(2026,0,d);return t.getDate()+' '+MON[t.getMonth()]};
+const dirTH=az=>['เหนือ','ตะวันออกเฉียงเหนือ','ตะวันออก','ตะวันออกเฉียงใต้','ใต้','ตะวันตกเฉียงใต้','ตะวันตก','ตะวันตกเฉียงเหนือ'][Math.round(az/45)%8];
+const doyI=document.getElementById('doy'),hrI=document.getElementById('hr');
+const now=new Date();const today=Math.floor((now-new Date(now.getFullYear(),0,0))/864e5);
+doyI.value=today;hrI.value=(sunset(today)-.6).toFixed(4);
+const sunDir=new THREE.Vector3(0,1,0);let fogBase=[.6,.7,.8];
+function applySun(){
+  const d=+doyI.value,h=+hrI.value,s=sunPos(d,h),ss2=sunset(d),sa=sunPos(d,ss2).az;
+  document.getElementById('doyO').textContent=doyLabel(d);document.getElementById('hrO').textContent=hhmm(h)+' น.';
+  document.getElementById('sDate').textContent=doyLabel(d);
+  document.getElementById('sSet').textContent=hhmm(ss2)+' น.';
+  document.getElementById('sSetAz').textContent='ทิศ '+Math.round(sa)+'° '+dirTH(sa);
+  document.getElementById('sNow').textContent=s.el>0?('สูง '+s.el.toFixed(0)+'°'):'ลับขอบฟ้า';
+  document.getElementById('sNowAz').textContent='ทิศ '+Math.round(s.az)+'° '+dirTH(s.az);
+  const el=s.el*D2R,az=s.az*D2R;sunDir.set(Math.sin(az)*Math.cos(el),Math.sin(el),-Math.cos(az)*Math.cos(el));
+  su.sunPosition.value.copy(sunDir);
+  const day=cl((s.el+5)/11),warm=ss(-1,20,s.el),lit=cl((s.el+1)/6);
+  sunL.color.setRGB(1,.5+.46*warm,.24+.68*warm);sunL.intensity=2.7*lit;
+  hemi.intensity=.18+.95*day;hemi.color.setRGB(.6+.25*(1-warm)*day,.68,.9);hemi.groundColor.setRGB(.3,.28*day+.05,.18);
+  const hor=mix([.012,.016,.03],mix([.95,.55,.30],[.62,.74,.9],warm),day);fogBase=hor;
+  const top=mix([.002,.004,.01],mix([.16,.22,.45],[.2,.4,.82],warm),day);
+  grassGlow.setRGB(.05,.075,.018).multiplyScalar(.25+.75*day);sunGlow.material.opacity=cl((s.el+3)/4)*.9;sunGlow.material.color.setRGB(1,.62+.38*warm,.4+.5*warm);
+  waterU.sunDir.value.copy(sunDir);waterU.sunCol.value.copy(sunL.color).multiplyScalar(lit*1.6);
+  waterU.skyTop.value.setRGB(...top);waterU.skyHor.value.setRGB(...hor);waterU.deep.value.setRGB(...[.035,.05,.045].map(v=>v*(.15+.85*day)));
+  scene.fog.color.setRGB(...hor);waterU.fogC.value.setRGB(...hor);
+  R.toneMappingExposure=.66+.3*(1-day);
+  const cc=mix([.07,.08,.12],mix([1,.62,.42],[1,1,1],warm),day);cloudMats.forEach(m=>m.color.setRGB(...cc));
+  const flat=new THREE.Vector3(Math.sin(az),0,-Math.cos(az));const c0=v3(C,1.2);
+  sunLine.geometry.setFromPoints([c0,c0.clone().addScaledVector(flat,1800)]);sunLine.computeLineDistances();
+  sunLab.p.copy(c0.clone().addScaledVector(flat,1900));
+  sunLab.el.firstChild.innerHTML=(s.el>0?'ทิศดวงอาทิตย์':'ทิศดวงอาทิตย์ (ใต้ขอบฟ้า)')+`<small>${Math.round(s.az)}° ${dirTH(s.az)}</small>`;
+}
+doyI.oninput=applySun;hrI.oninput=applySun;
+document.getElementById('goldBtn').onclick=()=>{hrI.value=(sunset(+doyI.value)-.5).toFixed(4);applySun()};
+
+// ---- layers ----
+const on={plot:true,dim:true,split:false,field:false,sun:true};
+document.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>{const k=b.dataset.l;on[k]=!on[k];b.setAttribute('aria-pressed',on[k]);syncLayers()});
+function syncLayers(){for(const k in on)groups[k].visible=on[k];applySun()}
+
+// ---- views ----
+const V={
+  over:()=>cam.aspect<1?{p:[C[0]+170,300,C[1]-200],t:[C[0]-10,0,C[1]+25]}:{p:[C[0]+210,150,C[1]-190],t:[C[0]-20,0,C[1]+40]},
+  top:()=>({p:[C[0],520,C[1]+.1],t:[C[0],0,C[1]]}),
+  drone:()=>({p:[C[0]+45,22,C[1]-95],t:[C[0]-5,0,C[1]+25]}),
+  isl:()=>{const s=sunPos(+doyI.value,+hrI.value),a=((s.az*2+216)/3)*D2R;return {p:[C[0]-Math.sin(a)*70,11,C[1]+Math.cos(a)*70],t:[C[0]+Math.sin(a)*2500,95,C[1]-Math.cos(a)*2500]}},
+  region:()=>({p:[C[0]+9000,26000,C[1]-14000],t:[C[0]-2500,0,C[1]+6500]})
+};
+let tw=null;
+function pressView(name){document.querySelectorAll('.views button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===name))}
+function go(name,instant){if(name==='walk')return enterWalk();if(walk)exitWalk(true);pressView(name);const v=V[name]();
+  const p1=new THREE.Vector3(...v.p),t1=new THREE.Vector3(...v.t);
+  if(instant||matchMedia('(prefers-reduced-motion: reduce)').matches){cam.position.copy(p1);ctl.target.copy(t1);tw=null;return}
+  tw={p0:cam.position.clone(),t0:ctl.target.clone(),p1,t1,s:performance.now(),d:1700}}
+document.querySelectorAll('.views button').forEach(b=>b.onclick=()=>go(b.dataset.v));
+const comp=document.getElementById('compass');
+const north=()=>{if(walk){yaw=0;return}const off=cam.position.clone().sub(ctl.target);const r=Math.hypot(off.x,off.z);tw={p0:cam.position.clone(),t0:ctl.target.clone(),p1:ctl.target.clone().add(new THREE.Vector3(0,off.y,r)),t1:ctl.target.clone(),s:performance.now(),d:900}};
+comp.onclick=north;comp.onkeydown=e=>{if(e.key==='Enter'||e.key===' ')north()};
+
+// ---- walk mode ----
+let walk=false,yaw=0,pitch=0,jx=0,jy=0;const keys={};const walkUI=document.getElementById('walkUI');
+function enterWalk(){walk=true;tw=null;ctl.enabled=false;pressView('walk');document.body.classList.add('walking');walkUI.hidden=false;
+  const s=P(0,B0+8);cam.position.set(s[0],groundY(s[0],s[1])+1.65,s[1]);yaw=Math.atan2(N[0]*-1,-N[1])*-1;yaw=Math.atan2(-N[0],-N[1]);pitch=-.03;
+  if(measuring)mBtn.click()}
+function exitWalk(silent){walk=false;ctl.enabled=true;document.body.classList.remove('walking');walkUI.hidden=true;jx=jy=0;
+  ctl.target.copy(cam.position).add(new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)).multiplyScalar(30));ctl.target.y=0;if(!silent)go('over')}
+document.getElementById('walkX').onclick=()=>exitWalk(false);
+addEventListener('keydown',e=>{keys[e.code]=true});addEventListener('keyup',e=>{keys[e.code]=false});
+let look=null;
+cv.addEventListener('pointerdown',e=>{if(walk){look=[e.clientX,e.clientY,e.pointerId];cv.setPointerCapture(e.pointerId)}});
+cv.addEventListener('pointermove',e=>{if(walk&&look&&e.pointerId===look[2]){yaw-=(e.clientX-look[0])*.0042;pitch=cl(pitch-(e.clientY-look[1])*.0042,-1.2,1.2);look[0]=e.clientX;look[1]=e.clientY}});
+cv.addEventListener('pointerup',()=>{look=null});
+const joy=document.getElementById('joy'),knob=joy.firstElementChild;let jid=null;
+joy.addEventListener('pointerdown',e=>{jid=e.pointerId;joy.setPointerCapture(jid);moveJoy(e)});
+joy.addEventListener('pointermove',e=>{if(e.pointerId===jid)moveJoy(e)});
+const endJoy=()=>{jid=null;jx=jy=0;knob.style.transform=''};joy.addEventListener('pointerup',endJoy);joy.addEventListener('pointercancel',endJoy);
+function moveJoy(e){const r=joy.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=(e.clientX-cx)/(r.width/2),dy=(e.clientY-cy)/(r.height/2);const m=Math.hypot(dx,dy);if(m>1){dx/=m;dy/=m}jx=dx;jy=dy;knob.style.transform=`translate(${dx*30}px,${dy*30}px)`}
+
+// ---- measure ----
+let measuring=false,mPts=[];const mBtn=document.getElementById('measure'),hint=document.getElementById('hint');
+mBtn.onclick=()=>{if(walk)return;measuring=!measuring;mBtn.setAttribute('aria-pressed',measuring);cv.classList.toggle('measuring',measuring);clearMeasure();hint.hidden=!measuring;hint.textContent='แตะจุดแรกบนแผนที่'};
+function clearMeasure(){while(groups.measure.children.length)groups.measure.remove(groups.measure.children[0]);for(let i=labels.length-1;i>=0;i--)if(labels[i].layer==='m'){labels[i].el.remove();labels.splice(i,1)}mPts=[]}
+const ray=new THREE.Raycaster(),gp=new THREE.Plane(new THREE.Vector3(0,1,0),0);let down=null;
+cv.addEventListener('pointerdown',e=>{down=[e.clientX,e.clientY];tw=null});
+cv.addEventListener('pointerup',e=>{if(walk||!measuring||!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;
+  const r=cv.getBoundingClientRect();ray.setFromCamera({x:(e.clientX-r.left)/r.width*2-1,y:-(e.clientY-r.top)/r.height*2+1},cam);
+  const hit=new THREE.Vector3();if(!ray.ray.intersectPlane(gp,hit))return;
+  if(mPts.length>=2)clearMeasure();mPts.push([hit.x,hit.z]);
+  const dot=new THREE.Mesh(new THREE.SphereGeometry(1,12,8),new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,fog:false}));dot.position.set(hit.x,1.5,hit.z);dot.renderOrder=32;dot.userData.sz=true;groups.measure.add(dot);
+  if(mPts.length===2){line(mPts,0xffffff,groups.measure,1,1.5);const d=Math.hypot(mPts[1][0]-mPts[0][0],mPts[1][1]-mPts[0][1]);
+    label((d>=1000?(d/1000).toFixed(2)+' กม.':Math.round(d)+' ม.'),[(mPts[0][0]+mPts[1][0])/2,(mPts[0][1]+mPts[1][1])/2],'dim',0,1e9,'m',2);hint.textContent='แตะอีกครั้งเพื่อวัดใหม่'}
+  else hint.textContent='แตะจุดที่สอง'});
+addEventListener('keydown',e=>{if(e.key==='Escape'){if(!document.getElementById('lb').hidden)closeLb();else if(walk)exitWalk(false);else if(measuring)mBtn.click()}});
+
+// ---- panel / sheet / lightbox ----
+const panel=document.getElementById('panel');
+document.getElementById('sheetH').onclick=()=>{panel.classList.toggle('open');document.getElementById('sheetT').textContent=panel.classList.contains('open')?'ย่อ':'รายละเอียด'};
+const lb=document.getElementById('lb');
+document.querySelectorAll('.photos button').forEach(b=>b.onclick=()=>{const i=document.getElementById('lbI');i.src=b.dataset.src;i.alt=b.dataset.cap;document.getElementById('lbC').textContent=b.dataset.cap;lb.hidden=false});
+function closeLb(){lb.hidden=true}
+document.getElementById('lbX').onclick=closeLb;lb.onclick=e=>{if(e.target===lb)closeLb()};
+
+// ---- loop ----
+function resize(){const w=innerWidth,h=innerHeight;R.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}
+addEventListener('resize',resize);resize();
+const ez=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const tmp=new THREE.Vector3(),fwd=new THREE.Vector3(),rgt=new THREE.Vector3();let last=performance.now();
+function frame(t){const dt=Math.min(.05,(t-last)/1000);last=t;timeU.value=t/1000;
+  if(walk){const kf=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),kr=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0);
+    if(keys.KeyQ)yaw+=1.6*dt;if(keys.KeyE)yaw-=1.6*dt;
+    const f=kf-jy,r=kr+jx,sp=(keys.ShiftLeft||keys.ShiftRight?9:3.2);
+    fwd.set(-Math.sin(yaw),0,-Math.cos(yaw));rgt.set(Math.cos(yaw),0,-Math.sin(yaw));
+    cam.position.addScaledVector(fwd,f*sp*dt).addScaledVector(rgt,r*sp*dt);
+    {let [a,b]=toAB(cam.position.x,cam.position.z);a=cl(a,-260,260);b=cl(b,-60,B0+DEPTH+12);cam.position.x=U[0]*a+N[0]*b;cam.position.z=U[1]*a+N[1]*b}
+    const moving=Math.abs(f)+Math.abs(r)>.05;cam.position.y=groundY(cam.position.x,cam.position.z)+1.65+(moving?Math.sin(t/160)*.035:0);
+    cam.rotation.set(pitch,yaw,0)}
+  else{if(tw){const k=Math.min(1,(t-tw.s)/tw.d),e=ez(k);
+      cam.position.lerpVectors(tw.p0,tw.p1,e);ctl.target.lerpVectors(tw.t0,tw.t1,e);
+      const hop=tw.p0.distanceTo(tw.p1);if(hop>2000)cam.position.y+=Math.sin(e*Math.PI)*Math.min(hop*.25,8000);
+      if(k>=1)tw=null}
+    ctl.update()}
+  const h=cam.position.y;scene.fog.density=1/(11000+h*4.2);waterU.fogD.value=scene.fog.density;
+  const focus=walk?cam.position:ctl.target;
+  sunL.target.position.set(Math.round(focus.x/8)*8,0,Math.round(focus.z/8)*8);sunL.position.copy(sunL.target.position).addScaledVector(sunDir,2000);
+  sunL.castShadow=h<3000&&sunDir.y>0;{const dd=60000;sunGlow.position.copy(cam.position).addScaledVector(sunDir,dd);sunGlow.scale.setScalar(dd*.075)}
+  nearGrass.visible=walk||h<60;if(nearGrass.visible){const st=NGST;nearGrass.position.set(Math.round(cam.position.x/st)*st,0,Math.round(cam.position.z/st)*st)}veg.visible=h<9000;
+  clouds.children.forEach((g,i)=>{g.position.x+=dt*(4+i%3);if(g.position.x-C[0]>15000)g.position.x-=30000});
+  const dC=cam.position.distanceTo(v3(C));groups.measure.children.forEach(o=>{if(o.userData.sz)o.scale.setScalar(Math.max(1,dC/250))});
+  const azc=walk?yaw:Math.atan2(cam.position.x-ctl.target.x,cam.position.z-ctl.target.z);
+  document.getElementById('needle').style.transform=`rotate(${azc*180/Math.PI+180}deg)`;
+  R.render(scene,cam);
+  const w=innerWidth,hh=innerHeight;
+  for(const L of labels){const vis=(!L.layer||L.layer==='m'||on[L.layer]);const d=cam.position.distanceTo(L.p);
+    tmp.copy(L.p).project(cam);
+    if(!vis||tmp.z>1||d<L.minD||d>L.maxD||Math.abs(tmp.x)>1.2||Math.abs(tmp.y)>1.2){L.el.style.opacity=0;continue}
+    L.el.style.opacity=1;L.el.style.transform=`translate(${(tmp.x+1)/2*w}px,${(1-tmp.y)/2*hh}px)`}
+  requestAnimationFrame(frame)}
+syncLayers();
+go('region',true);
+requestAnimationFrame(frame);
+ready.then(()=>setTimeout(()=>go('over'),300));
+})();
+</script>
+<script>
+(function(){
+  const lay=document.getElementById('layers'),btn=document.getElementById('layBtn');
+  const set=o=>{lay.hidden=!o;btn.setAttribute('aria-expanded',o);btn.setAttribute('aria-pressed',o)};
+  btn.onclick=()=>set(lay.hidden);
+  document.getElementById('layDone').onclick=()=>set(false);
+  document.addEventListener('pointerdown',e=>{if(!lay.hidden&&!lay.contains(e.target)&&!btn.contains(e.target))set(false)});
+  addEventListener('keydown',e=>{if(e.key==='Escape')set(false)});
+  document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{document.querySelector(`.views [data-v="${b.dataset.go}"]`).click();document.getElementById('panel').classList.remove('open')});
+})();
+</script>
